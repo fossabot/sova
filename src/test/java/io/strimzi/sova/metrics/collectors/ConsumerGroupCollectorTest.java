@@ -4,19 +4,27 @@
  */
 package io.strimzi.sova.metrics.collectors;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DescribeClusterResult;
 import org.apache.kafka.clients.admin.GroupListing;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
+import org.apache.kafka.clients.admin.ListGroupsResult;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 
+import io.strimzi.sova.config.SovaConfig;
 import io.strimzi.sova.metrics.MetricSnapshot.ConsumerGroupTopicKey;
 import io.strimzi.sova.metrics.MetricSnapshot.ConsumerGroupTopicPartitionKey;
 import io.strimzi.sova.metrics.collectors.ConsumerGroupCollector.ConsumerGroupData;
@@ -28,13 +36,20 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
- * Unit tests for the pure steps of {@code ConsumerGroupCollector}: {@code computeLag} and
- * {@code requireUsableListing}.
+ * Unit tests for {@code ConsumerGroupCollector}: the pure steps {@code computeLag} and
+ * {@code requireUsableListing}, plus the failed-listing paths of {@code collect}.
  *
- * <p>Pure functions over plain records, with no {@code Admin} dependency, so every scenario is
- * built directly rather than through a stubbed AdminClient. Expected values below are derived
+ * <p>The pure steps take plain records, so their scenarios are built directly. Only the
+ * {@code collect} tests need an AdminClient, and they mock {@code listGroups} and
+ * {@code describeCluster} — states a live cluster in the integration tests cannot easily be
+ * pushed into. Expected values below are derived
  * from the invariants documented in {@code AGENTS.md} (negative lag is never clamped, {@code -1}
  * is synthesised for uncommitted partitions and excluded from the sums, a topic with no commits
  * produces no series, and so on) — not from running the collector and recording its output.
@@ -75,6 +90,61 @@ class ConsumerGroupCollectorTest {
     void partialListingIsKept() {
         assertDoesNotThrow(() -> ConsumerGroupCollector.requireUsableListing(
                 List.of(listing("g1")), List.of(new RuntimeException("one broker down")), 3));
+    }
+
+    /**
+     * End to end through {@code collect}: when every broker failed the listing, the broker count
+     * is looked up and the cycle fails instead of yielding an empty snapshot.
+     */
+    @Test
+    void collectFailsWhenListingFailedOnEveryBroker() {
+        RuntimeException cause = new RuntimeException("b1");
+        Admin admin = stubAdmin(List.of(cause, new RuntimeException("b2")), 2);
+        CollectionFailedException e = assertThrows(CollectionFailedException.class,
+                () -> ConsumerGroupCollector.collect(admin, SovaConfig.forTesting("localhost:9092")));
+        assertSame(cause, e.getCause());
+    }
+
+    /**
+     * End to end through {@code collect}: one broker of three failed and the others host no
+     * groups, so the cycle goes on with an empty group set.
+     */
+    @Test
+    void collectKeepsEmptyListingWhenSomeBrokersAnswered() throws Exception {
+        Admin admin = stubAdmin(List.of(new RuntimeException("one broker down")), 3);
+        ConsumerGroupData data = ConsumerGroupCollector.collect(admin, SovaConfig.forTesting("localhost:9092"));
+        assertTrue(data.members().isEmpty());
+        assertTrue(data.committedOffsets().isEmpty());
+    }
+
+    /**
+     * An empty listing without errors is the common "no groups" case: the broker count is not
+     * needed, so {@code describeCluster} must not be called.
+     */
+    @Test
+    void collectSkipsBrokerCountWhenListingHadNoErrors() throws Exception {
+        Admin admin = stubAdmin(List.of(), 3);
+        ConsumerGroupData data = ConsumerGroupCollector.collect(admin, SovaConfig.forTesting("localhost:9092"));
+        assertTrue(data.members().isEmpty());
+        verify(admin, never()).describeCluster();
+    }
+
+    /**
+     * A mocked {@code Admin} whose {@code listGroups} returns no groups and the given per-broker
+     * failures, and whose {@code describeCluster} reports {@code brokerCount} nodes.
+     */
+    private static Admin stubAdmin(List<Throwable> listingErrors, int brokerCount) {
+        ListGroupsResult listing = mock(ListGroupsResult.class);
+        when(listing.valid()).thenReturn(KafkaFuture.completedFuture(List.of()));
+        when(listing.errors()).thenReturn(KafkaFuture.completedFuture(listingErrors));
+
+        DescribeClusterResult cluster = mock(DescribeClusterResult.class);
+        when(cluster.nodes()).thenReturn(KafkaFuture.completedFuture(Collections.nCopies(brokerCount, Node.noNode())));
+
+        Admin admin = mock(Admin.class);
+        when(admin.listGroups(any(ListGroupsOptions.class))).thenReturn(listing);
+        when(admin.describeCluster()).thenReturn(cluster);
+        return admin;
     }
 
     private static GroupListing listing(String groupId) {

@@ -59,6 +59,11 @@
     <!-- JUnit -->
     <junit.version>6.1.3</junit.version>
 
+    <!-- Mockito: the subclass mock maker is enough for the interfaces and non-final classes the
+         tests stub, and unlike the default inline one it needs no Java agent attached. The
+         reflection member accessor (src/test/resources/mockito-extensions) avoids the agent too. -->
+    <mockito.version>5.24.0</mockito.version>
+
     <!-- Strimzi test container -->
     <strimzi.test.container.version>0.117.0</strimzi.test.container.version>
 
@@ -122,6 +127,12 @@
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
       <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-subclass</artifactId>
+      <version>${mockito.version}</version>
       <scope>test</scope>
     </dependency>
     <dependency>
