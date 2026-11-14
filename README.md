@@ -19,7 +19,7 @@ unzip sova-*.zip && cd sova-*/
 export STRIMZI_KAFKA_ADMIN_CLIENT_CONFIGURATION='bootstrap.servers=kafka-bootstrap:9093
 security.protocol=SSL
 ssl.truststore.type=PEM
-ssl.truststore.certificates=${strimzisecrets:my-ns/my-cluster-cluster-ca-cert:ca.crt}'
+ssl.truststore.location=/path/to/ca.crt'
 java -classpath "libs/*" io.strimzi.sova.Main
 ```
 
@@ -38,22 +38,14 @@ Every entry is passed to the Kafka `Admin` client as it is, for example:
 bootstrap.servers=my-cluster-kafka-bootstrap:9093
 security.protocol=SSL
 ssl.truststore.type=PEM
-ssl.truststore.certificates=${strimzisecrets:my-ns/my-cluster-cluster-ca-cert:ca.crt}
+ssl.truststore.location=/path/to/ca.crt
 ```
 
 A value that is not valid properties syntax fails Sova at startup.
 
-The `${strimzisecrets:...}` placeholders in the examples are resolved by the [Strimzi Kubernetes config provider](https://github.com/strimzi/kafka-kubernetes-config-provider), which is not part of the Sova ZIP.
-To use them, put `io.strimzi:kafka-kubernetes-config-provider` on the classpath and add these entries to the configuration:
-
-```properties
-config.providers=strimzisecrets
-config.providers.strimzisecrets.class=io.strimzi.kafka.KubernetesSecretConfigProvider
-```
-
-Outside Kubernetes, point `ssl.truststore.location` (and `ssl.keystore.location` for mutual TLS) at files instead.
-The provider reads the Secrets through the Kubernetes API, so the service account Sova runs as needs RBAC permission to `get` each referenced Secret.
-When Sova is deployed by the Strimzi Cluster Operator, all of this is set up for you.
+Because the properties are passed to the Kafka client unchanged, Kafka config providers (`config.providers=...`) work as usual.
+Use them to read credentials from files, environment variables, or Kubernetes Secrets, for example with the [Strimzi Kubernetes config provider](https://github.com/strimzi/kafka-kubernetes-config-provider).
+The provider's JAR must be on the classpath.
 
 > **Note:** 
 > At startup, Sova logs only the keys of this variable, never the values to keep credentials out of the log.
