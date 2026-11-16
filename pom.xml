@@ -50,7 +50,7 @@
 
     <!-- Prometheus — 1.9.0 or later required: HttpErrorHandlingPolicy (added in 1.9.0) keeps
          scrape exception stack traces out of HTTP responses. -->
-    <prometheus.version>1.9.0</prometheus.version>
+    <prometheus.version>1.10.0</prometheus.version>
 
     <!-- Logging -->
     <slf4j.version>2.0.17</slf4j.version>
