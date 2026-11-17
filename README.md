@@ -3,6 +3,7 @@
 [![Build Status](https://github.com/strimzi/sova/actions/workflows/build.yml/badge.svg)](https://github.com/strimzi/sova/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](http://www.apache.org/licenses/LICENSE-2.0)
 [![Twitter Follow](https://img.shields.io/twitter/follow/strimziio?style=social)](https://twitter.com/strimziio)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fstrimzi%2Fsova.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fstrimzi%2Fsova?ref=badge_shield)
 
 Sova is a Kafka consumer group metrics exporter for Prometheus, written in pure Java.
 
@@ -139,3 +140,7 @@ You can use it to verify the archive without querying the GitHub Attestation API
 ```
 gh attestation verify <release-archive> --bundle release-<version>.intoto.jsonl --repo strimzi/sova --signer-repo strimzi/github-actions
 ```
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fstrimzi%2Fsova.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fstrimzi%2Fsova?ref=badge_large)
